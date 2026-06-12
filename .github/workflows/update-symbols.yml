@@ -1,0 +1,52 @@
+name: Update Symbols
+
+on:
+  schedule:
+    - cron: "17 19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-symbols
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Regenerate symbol files
+        run: |
+          go run ./cmd/fetch-symbols -market kospi -out symbols.txt
+          go run ./cmd/fetch-symbols -market kosdaq -out symbols-kosdaq.txt
+          go run ./cmd/fetch-symbols -market kr -out symbols-kr.txt
+          go run ./cmd/fetch-symbols -market nasdaq -out symbols-nasdaq.txt
+          go run ./cmd/fetch-symbols -market nyse -out symbols-nyse.txt
+          go run ./cmd/fetch-symbols -market us -out symbols-us.txt
+          go run ./cmd/fetch-symbols -market nasdaq -stocks-only -out symbols-nasdaq-stocks.txt
+          go run ./cmd/fetch-symbols -market nyse -stocks-only -out symbols-nyse-stocks.txt
+          go run ./cmd/fetch-symbols -market us -stocks-only -out symbols-us-stocks.txt
+          go run ./cmd/fetch-symbols -market all-stocks -out symbols-all-stocks.txt
+
+      - name: Commit and push changes
+        run: |
+          if git diff --quiet -- symbols*.txt; then
+            echo "No symbol changes."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add symbols*.txt
+          git commit -m "Update symbol files"
+          git push
