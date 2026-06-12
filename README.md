@@ -12,6 +12,13 @@ export TOSSINVEST_CLIENT_SECRET='your-client-secret'
 export TOSSINVEST_SYMBOLS_FILE='./symbols.txt'
 ```
 
+The exporter also accepts `.env` files with these aliases:
+
+```sh
+client_id='your-client-id'
+client_secret='your-client-secret'
+```
+
 `symbols.txt` can contain comma-separated symbols or one symbol per line:
 
 ```text
@@ -89,6 +96,95 @@ Then scrape:
 
 ```text
 http://localhost:9108/metrics
+```
+
+Health check:
+
+```text
+http://localhost:9108/healthz
+```
+
+## Docker
+
+Build locally:
+
+```sh
+docker build -t tossinvest-exporter .
+```
+
+Run with the default all-stocks symbol file bundled in the image:
+
+```sh
+docker run --rm -p 9108:9108 \
+  -e TOSSINVEST_CLIENT_ID='your-client-id' \
+  -e TOSSINVEST_CLIENT_SECRET='your-client-secret' \
+  tossinvest-exporter
+```
+
+The image defaults to:
+
+```sh
+TOSSINVEST_LISTEN_ADDR=:9108
+TOSSINVEST_SYMBOLS_FILE=/app/symbols-all-stocks.txt
+```
+
+Use GHCR after the container workflow publishes:
+
+```sh
+docker pull ghcr.io/pmh-only/tossinvest-exporter:latest
+docker run --rm -p 9108:9108 \
+  -e TOSSINVEST_CLIENT_ID='your-client-id' \
+  -e TOSSINVEST_CLIENT_SECRET='your-client-secret' \
+  ghcr.io/pmh-only/tossinvest-exporter:latest
+```
+
+Published tags include `latest`, `main`, and `sha-<commit>`.
+
+## Prometheus
+
+```yaml
+scrape_configs:
+  - job_name: tossinvest
+    scrape_interval: 60s
+    scrape_timeout: 55s
+    static_configs:
+      - targets:
+          - localhost:9108
+```
+
+For all-stocks scraping, use a longer scrape interval than the default because the exporter fetches thousands of symbols in batches.
+
+## GitHub Actions
+
+`Update Symbols` runs daily and can also be triggered manually. It regenerates all symbol files and commits changes when the generated files differ:
+
+```text
+.github/workflows/update-symbols.yml
+```
+
+Generated files include:
+
+- `symbols.txt`
+- `symbols-kosdaq.txt`
+- `symbols-kr.txt`
+- `symbols-nasdaq.txt`
+- `symbols-nyse.txt`
+- `symbols-us.txt`
+- `symbols-nasdaq-stocks.txt`
+- `symbols-nyse-stocks.txt`
+- `symbols-us-stocks.txt`
+- `symbols-all-stocks.txt`
+
+`Container` runs when code, Docker files, workflow files, or symbol files change. It builds `linux/amd64` and `linux/arm64` images on native runners, pushes each image by digest to GHCR, then merges them into a multi-arch manifest:
+
+```text
+.github/workflows/container.yml
+```
+
+The image is published to:
+
+```text
+ghcr.io/pmh-only/tossinvest-exporter
 ```
 
 ## Metrics
