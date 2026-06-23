@@ -68,13 +68,13 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never"}, "decimals": 2}, "overrides": []},
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
       "id": 7,
-      "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "single", "sort": "none"}},
-      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "tossinvest_price_last{symbol=\"$symbol\"}", "legendFormat": "{{symbol}} {{currency}}", "refId": "A"}],
-      "title": "Selected Symbol Price",
-      "type": "timeseries"
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single", "sort": "none"}},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "count by (currency) (tossinvest_price_last)", "legendFormat": "{{currency}}", "refId": "A"}],
+      "title": "Priced Symbols By Currency",
+      "type": "barchart"
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
@@ -91,12 +91,12 @@
   "schemaVersion": 39,
   "style": "dark",
   "tags": ["tossinvest", "stocks"],
-  "templating": {"list": [{"current": {"selected": false, "text": "005930", "value": "005930"}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "definition": "label_values(tossinvest_price_last, symbol)", "hide": 0, "includeAll": false, "label": "Symbol", "multi": false, "name": "symbol", "options": [], "query": {"query": "label_values(tossinvest_price_last, symbol)", "refId": "StandardVariableQuery"}, "refresh": 1, "regex": "", "skipUrlSync": false, "sort": 1, "type": "query"}]},
+  "templating": {"list": []},
   "time": {"from": "now-6h", "to": "now"},
   "timepicker": {},
   "timezone": "browser",
   "title": "Toss Invest Exporter Overview",
   "uid": "tossinvest-overview",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

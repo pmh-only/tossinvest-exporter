@@ -130,16 +130,13 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"custom": {"drawStyle": "line", "fillOpacity": 15, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never"}, "decimals": 2}, "overrides": []},
+      "fieldConfig": {"defaults": {"decimals": 2}, "overrides": []},
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
       "id": 12,
-      "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "single", "sort": "none"}},
-      "targets": [
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "tossinvest_holding_market_value{account_seq=\"$account\",symbol=\"$symbol\"}", "legendFormat": "market value {{currency}}", "refId": "A"},
-        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "tossinvest_holding_profit_loss{account_seq=\"$account\",symbol=\"$symbol\"}", "legendFormat": "P/L {{currency}}", "refId": "B"}
-      ],
-      "title": "Selected Holding",
-      "type": "timeseries"
+      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull"]}, "tooltip": {"mode": "single", "sort": "none"}},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "topk(20, tossinvest_holding_profit_loss{account_seq=\"$account\",currency=\"$currency\"})", "legendFormat": "{{symbol}}", "refId": "A"}],
+      "title": "Top Holdings By Profit/Loss ($currency)",
+      "type": "barchart"
     }
   ],
   "refresh": "1m",
@@ -149,8 +146,7 @@
   "templating": {
     "list": [
       {"current": {}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "definition": "label_values(tossinvest_account_info, account_seq)", "hide": 0, "includeAll": false, "label": "Account", "multi": false, "name": "account", "options": [], "query": {"query": "label_values(tossinvest_account_info, account_seq)", "refId": "StandardVariableQuery"}, "refresh": 1, "regex": "", "skipUrlSync": false, "sort": 1, "type": "query"},
-      {"current": {"selected": false, "text": "USD", "value": "USD"}, "hide": 0, "includeAll": false, "label": "Currency", "multi": false, "name": "currency", "options": [{"selected": false, "text": "KRW", "value": "KRW"}, {"selected": true, "text": "USD", "value": "USD"}], "query": "KRW,USD", "skipUrlSync": false, "type": "custom"},
-      {"current": {}, "datasource": {"type": "prometheus", "uid": "prometheus"}, "definition": "label_values(tossinvest_holding_info{account_seq=\"$account\"}, symbol)", "hide": 0, "includeAll": false, "label": "Symbol", "multi": false, "name": "symbol", "options": [], "query": {"query": "label_values(tossinvest_holding_info{account_seq=\"$account\"}, symbol)", "refId": "StandardVariableQuery"}, "refresh": 1, "regex": "", "skipUrlSync": false, "sort": 1, "type": "query"}
+      {"current": {"selected": false, "text": "USD", "value": "USD"}, "hide": 0, "includeAll": false, "label": "Currency", "multi": false, "name": "currency", "options": [{"selected": false, "text": "KRW", "value": "KRW"}, {"selected": true, "text": "USD", "value": "USD"}], "query": "KRW,USD", "skipUrlSync": false, "type": "custom"}
     ]
   },
   "time": {"from": "now-6h", "to": "now"},
@@ -158,6 +154,6 @@
   "timezone": "browser",
   "title": "Toss Invest Portfolio",
   "uid": "tossinvest-portfolio",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

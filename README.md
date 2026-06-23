@@ -210,7 +210,7 @@ The dashboards are:
 - `Toss Invest Exporter Overview`
 - `Toss Invest Portfolio`
 
-The portfolio dashboard shows raw USD totals and KRW-equivalent totals converted with `tossinvest_exchange_rate`. The holding currency selector defaults to `USD`; switch it to `KRW` if the account has Korean holdings.
+The dashboards are aggregate/global views, not per-symbol dashboards. The portfolio dashboard shows raw USD totals, KRW-equivalent totals converted with `tossinvest_exchange_rate`, top holdings by market value, and top holdings by profit/loss. The holding currency selector defaults to `USD`; switch it to `KRW` if the account has Korean holdings.
 
 If you run Prometheus and Grafana with the local container names used during development, the Grafana datasource points at:
 
