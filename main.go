@@ -27,14 +27,18 @@ const (
 )
 
 type config struct {
-	ListenAddr   string
-	ClientID     string
-	ClientSecret string
-	Symbols      []string
-	MarketFilter string
-	StockInfoTTL time.Duration
-	PriceRPS     int
-	StockRPS     int
+	ListenAddr       string
+	ClientID         string
+	ClientSecret     string
+	Symbols          []string
+	MarketFilter     string
+	PortfolioEnabled bool
+	StockInfoTTL     time.Duration
+	AccountTTL       time.Duration
+	PriceRPS         int
+	StockRPS         int
+	AccountRPS       int
+	AssetRPS         int
 }
 
 type apiClient struct {
@@ -93,32 +97,137 @@ type exchangeRateResponse struct {
 	ValidUntil    time.Time   `json:"validUntil"`
 }
 
+type account struct {
+	AccountSeq  int64  `json:"accountSeq"`
+	AccountType string `json:"accountType"`
+}
+
+type holdingsOverview struct {
+	TotalPurchaseAmount *currencyAmounts         `json:"totalPurchaseAmount"`
+	MarketValue         *overviewMarketValue     `json:"marketValue"`
+	ProfitLoss          *overviewProfitLoss      `json:"profitLoss"`
+	DailyProfitLoss     *overviewDailyProfitLoss `json:"dailyProfitLoss"`
+	Items               []holdingItem            `json:"items"`
+}
+
+type currencyAmounts struct {
+	KRW *json.Number `json:"krw"`
+	USD *json.Number `json:"usd"`
+}
+
+type overviewMarketValue struct {
+	Amount          *currencyAmounts `json:"amount"`
+	AmountAfterCost *currencyAmounts `json:"amountAfterCost"`
+}
+
+type overviewProfitLoss struct {
+	Amount          *currencyAmounts `json:"amount"`
+	AmountAfterCost *currencyAmounts `json:"amountAfterCost"`
+	Rate            *json.Number     `json:"rate"`
+	RateAfterCost   *json.Number     `json:"rateAfterCost"`
+}
+
+type overviewDailyProfitLoss struct {
+	Amount *currencyAmounts `json:"amount"`
+	Rate   *json.Number     `json:"rate"`
+}
+
+type holdingItem struct {
+	Symbol               string              `json:"symbol"`
+	Name                 string              `json:"name"`
+	MarketCountry        string              `json:"marketCountry"`
+	Currency             string              `json:"currency"`
+	Quantity             *json.Number        `json:"quantity"`
+	LastPrice            *json.Number        `json:"lastPrice"`
+	AveragePurchasePrice *json.Number        `json:"averagePurchasePrice"`
+	MarketValue          *holdingMarketValue `json:"marketValue"`
+	ProfitLoss           *holdingProfitLoss  `json:"profitLoss"`
+	DailyProfitLoss      *holdingDailyPL     `json:"dailyProfitLoss"`
+	Cost                 *holdingCost        `json:"cost"`
+}
+
+type holdingMarketValue struct {
+	PurchaseAmount  *json.Number `json:"purchaseAmount"`
+	Amount          *json.Number `json:"amount"`
+	AmountAfterCost *json.Number `json:"amountAfterCost"`
+}
+
+type holdingProfitLoss struct {
+	Amount          *json.Number `json:"amount"`
+	AmountAfterCost *json.Number `json:"amountAfterCost"`
+	Rate            *json.Number `json:"rate"`
+	RateAfterCost   *json.Number `json:"rateAfterCost"`
+}
+
+type holdingDailyPL struct {
+	Amount *json.Number `json:"amount"`
+	Rate   *json.Number `json:"rate"`
+}
+
+type holdingCost struct {
+	Commission *json.Number `json:"commission"`
+	Tax        *json.Number `json:"tax"`
+}
+
 type exporter struct {
-	client       *apiClient
-	symbols      []string
-	marketFilter string
-	stockLimiter *time.Ticker
-	priceLimiter *time.Ticker
+	client         *apiClient
+	symbols        []string
+	marketFilter   string
+	stockLimiter   *time.Ticker
+	priceLimiter   *time.Ticker
+	accountLimiter *time.Ticker
+	assetLimiter   *time.Ticker
 
-	stockInfoTTL time.Duration
-	stockMu      sync.Mutex
-	stockFetched time.Time
-	stocks       []stockInfo
-	priceSymbols []string
+	stockInfoTTL     time.Duration
+	portfolioEnabled bool
+	accountTTL       time.Duration
+	stockMu          sync.Mutex
+	stockFetched     time.Time
+	stocks           []stockInfo
+	priceSymbols     []string
+	accountMu        sync.Mutex
+	accountsFetched  time.Time
+	accounts         []account
 
-	priceLast      *prometheus.Desc
-	priceTimestamp *prometheus.Desc
-	stockInfo      *prometheus.Desc
-	shares         *prometheus.Desc
-	krxSuspended   *prometheus.Desc
-	nxtSuspended   *prometheus.Desc
-	liquidation    *prometheus.Desc
-	exchangeRate   *prometheus.Desc
-	exchangeMid    *prometheus.Desc
-	exchangeBP     *prometheus.Desc
-	exchangeValid  *prometheus.Desc
-	scrapeSuccess  *prometheus.Desc
-	scrapeDuration *prometheus.Desc
+	priceLast                        *prometheus.Desc
+	priceTimestamp                   *prometheus.Desc
+	stockInfo                        *prometheus.Desc
+	shares                           *prometheus.Desc
+	krxSuspended                     *prometheus.Desc
+	nxtSuspended                     *prometheus.Desc
+	liquidation                      *prometheus.Desc
+	exchangeRate                     *prometheus.Desc
+	exchangeMid                      *prometheus.Desc
+	exchangeBP                       *prometheus.Desc
+	exchangeValid                    *prometheus.Desc
+	accountInfo                      *prometheus.Desc
+	portfolioCount                   *prometheus.Desc
+	portfolioTotalPurchase           *prometheus.Desc
+	portfolioMarketValue             *prometheus.Desc
+	portfolioMarketValueAfterCost    *prometheus.Desc
+	portfolioProfitLoss              *prometheus.Desc
+	portfolioProfitLossAfterCost     *prometheus.Desc
+	portfolioProfitLossRate          *prometheus.Desc
+	portfolioProfitLossRateAfterCost *prometheus.Desc
+	portfolioDailyProfitLoss         *prometheus.Desc
+	portfolioDailyProfitLossRate     *prometheus.Desc
+	holdingInfo                      *prometheus.Desc
+	holdingQuantity                  *prometheus.Desc
+	holdingLastPrice                 *prometheus.Desc
+	holdingAveragePurchasePrice      *prometheus.Desc
+	holdingPurchaseAmount            *prometheus.Desc
+	holdingMarketValue               *prometheus.Desc
+	holdingMarketValueAfterCost      *prometheus.Desc
+	holdingProfitLoss                *prometheus.Desc
+	holdingProfitLossAfterCost       *prometheus.Desc
+	holdingProfitLossRate            *prometheus.Desc
+	holdingProfitLossRateAfterCost   *prometheus.Desc
+	holdingDailyProfitLoss           *prometheus.Desc
+	holdingDailyProfitLossRate       *prometheus.Desc
+	holdingCommission                *prometheus.Desc
+	holdingTax                       *prometheus.Desc
+	scrapeSuccess                    *prometheus.Desc
+	scrapeDuration                   *prometheus.Desc
 }
 
 func main() {
@@ -153,13 +262,17 @@ func main() {
 
 func loadConfig() (config, error) {
 	cfg := config{
-		ListenAddr:   getenv("TOSSINVEST_LISTEN_ADDR", ":9108"),
-		ClientID:     getenvAny("TOSSINVEST_CLIENT_ID", "client_id"),
-		ClientSecret: getenvAny("TOSSINVEST_CLIENT_SECRET", "client_secret"),
-		MarketFilter: strings.TrimSpace(os.Getenv("TOSSINVEST_MARKET_FILTER")),
-		StockInfoTTL: getenvDuration("TOSSINVEST_STOCK_INFO_TTL", 24*time.Hour),
-		PriceRPS:     getenvInt("TOSSINVEST_PRICE_RPS", 10),
-		StockRPS:     getenvInt("TOSSINVEST_STOCK_RPS", 5),
+		ListenAddr:       getenv("TOSSINVEST_LISTEN_ADDR", ":9108"),
+		ClientID:         getenvAny("TOSSINVEST_CLIENT_ID", "client_id"),
+		ClientSecret:     getenvAny("TOSSINVEST_CLIENT_SECRET", "client_secret"),
+		MarketFilter:     strings.TrimSpace(os.Getenv("TOSSINVEST_MARKET_FILTER")),
+		PortfolioEnabled: getenvBool("TOSSINVEST_PORTFOLIO_ENABLED", true),
+		StockInfoTTL:     getenvDuration("TOSSINVEST_STOCK_INFO_TTL", 24*time.Hour),
+		AccountTTL:       getenvDuration("TOSSINVEST_ACCOUNT_TTL", 24*time.Hour),
+		PriceRPS:         getenvInt("TOSSINVEST_PRICE_RPS", 10),
+		StockRPS:         getenvInt("TOSSINVEST_STOCK_RPS", 5),
+		AccountRPS:       getenvInt("TOSSINVEST_ACCOUNT_RPS", 1),
+		AssetRPS:         getenvInt("TOSSINVEST_ASSET_RPS", 5),
 	}
 	if cfg.ClientID == "" || cfg.ClientSecret == "" {
 		return cfg, errors.New("TOSSINVEST_CLIENT_ID and TOSSINVEST_CLIENT_SECRET are required")
@@ -173,7 +286,7 @@ func loadConfig() (config, error) {
 		return cfg, errors.New("provide symbols with TOSSINVEST_SYMBOLS or TOSSINVEST_SYMBOLS_FILE")
 	}
 	cfg.Symbols = symbols
-	if cfg.PriceRPS <= 0 || cfg.StockRPS <= 0 {
+	if cfg.PriceRPS <= 0 || cfg.StockRPS <= 0 || cfg.AccountRPS <= 0 || cfg.AssetRPS <= 0 {
 		return cfg, errors.New("rate limits must be positive")
 	}
 	return cfg, nil
@@ -225,12 +338,16 @@ func loadSymbols() ([]string, error) {
 
 func newExporter(client *apiClient, cfg config) *exporter {
 	return &exporter{
-		client:       client,
-		symbols:      cfg.Symbols,
-		marketFilter: cfg.MarketFilter,
-		stockLimiter: time.NewTicker(time.Second / time.Duration(cfg.StockRPS)),
-		priceLimiter: time.NewTicker(time.Second / time.Duration(cfg.PriceRPS)),
-		stockInfoTTL: cfg.StockInfoTTL,
+		client:           client,
+		symbols:          cfg.Symbols,
+		marketFilter:     cfg.MarketFilter,
+		stockLimiter:     time.NewTicker(time.Second / time.Duration(cfg.StockRPS)),
+		priceLimiter:     time.NewTicker(time.Second / time.Duration(cfg.PriceRPS)),
+		accountLimiter:   time.NewTicker(time.Second / time.Duration(cfg.AccountRPS)),
+		assetLimiter:     time.NewTicker(time.Second / time.Duration(cfg.AssetRPS)),
+		stockInfoTTL:     cfg.StockInfoTTL,
+		portfolioEnabled: cfg.PortfolioEnabled,
+		accountTTL:       cfg.AccountTTL,
 		priceLast: prometheus.NewDesc(
 			"tossinvest_price_last",
 			"Last traded price from Toss Securities Open API.",
@@ -286,6 +403,136 @@ func newExporter(client *apiClient, cfg config) *exporter {
 			"Unix timestamp until which the exchange rate is valid.",
 			[]string{"base_currency", "quote_currency"}, nil,
 		),
+		accountInfo: prometheus.NewDesc(
+			"tossinvest_account_info",
+			"Toss Securities account metadata. Account numbers are intentionally not exported.",
+			[]string{"account_seq", "account_type"}, nil,
+		),
+		portfolioCount: prometheus.NewDesc(
+			"tossinvest_portfolio_holding_count",
+			"Number of holdings in the account portfolio.",
+			[]string{"account_seq"}, nil,
+		),
+		portfolioTotalPurchase: prometheus.NewDesc(
+			"tossinvest_portfolio_total_purchase_amount",
+			"Portfolio total purchase amount by account and currency.",
+			[]string{"account_seq", "currency"}, nil,
+		),
+		portfolioMarketValue: prometheus.NewDesc(
+			"tossinvest_portfolio_market_value",
+			"Portfolio market value by account and currency.",
+			[]string{"account_seq", "currency"}, nil,
+		),
+		portfolioMarketValueAfterCost: prometheus.NewDesc(
+			"tossinvest_portfolio_market_value_after_cost",
+			"Portfolio market value after tax and commission by account and currency.",
+			[]string{"account_seq", "currency"}, nil,
+		),
+		portfolioProfitLoss: prometheus.NewDesc(
+			"tossinvest_portfolio_profit_loss",
+			"Portfolio profit/loss amount by account and currency.",
+			[]string{"account_seq", "currency"}, nil,
+		),
+		portfolioProfitLossAfterCost: prometheus.NewDesc(
+			"tossinvest_portfolio_profit_loss_after_cost",
+			"Portfolio profit/loss amount after tax and commission by account and currency.",
+			[]string{"account_seq", "currency"}, nil,
+		),
+		portfolioProfitLossRate: prometheus.NewDesc(
+			"tossinvest_portfolio_profit_loss_rate",
+			"Portfolio profit/loss rate as a ratio, converted to KRW by Toss.",
+			[]string{"account_seq"}, nil,
+		),
+		portfolioProfitLossRateAfterCost: prometheus.NewDesc(
+			"tossinvest_portfolio_profit_loss_rate_after_cost",
+			"Portfolio profit/loss rate after tax and commission as a ratio, converted to KRW by Toss.",
+			[]string{"account_seq"}, nil,
+		),
+		portfolioDailyProfitLoss: prometheus.NewDesc(
+			"tossinvest_portfolio_daily_profit_loss",
+			"Portfolio daily profit/loss amount by account and currency.",
+			[]string{"account_seq", "currency"}, nil,
+		),
+		portfolioDailyProfitLossRate: prometheus.NewDesc(
+			"tossinvest_portfolio_daily_profit_loss_rate",
+			"Portfolio daily profit/loss rate as a ratio, converted to KRW by Toss.",
+			[]string{"account_seq"}, nil,
+		),
+		holdingInfo: prometheus.NewDesc(
+			"tossinvest_holding_info",
+			"Portfolio holding metadata.",
+			[]string{"account_seq", "symbol", "name", "market_country", "currency"}, nil,
+		),
+		holdingQuantity: prometheus.NewDesc(
+			"tossinvest_holding_quantity",
+			"Portfolio holding quantity.",
+			[]string{"account_seq", "symbol"}, nil,
+		),
+		holdingLastPrice: prometheus.NewDesc(
+			"tossinvest_holding_last_price",
+			"Portfolio holding last price in the holding currency.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingAveragePurchasePrice: prometheus.NewDesc(
+			"tossinvest_holding_average_purchase_price",
+			"Portfolio holding average purchase price in the holding currency.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingPurchaseAmount: prometheus.NewDesc(
+			"tossinvest_holding_purchase_amount",
+			"Portfolio holding purchase amount in the holding currency.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingMarketValue: prometheus.NewDesc(
+			"tossinvest_holding_market_value",
+			"Portfolio holding market value in the holding currency.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingMarketValueAfterCost: prometheus.NewDesc(
+			"tossinvest_holding_market_value_after_cost",
+			"Portfolio holding market value after tax and commission in the holding currency.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingProfitLoss: prometheus.NewDesc(
+			"tossinvest_holding_profit_loss",
+			"Portfolio holding profit/loss amount in the holding currency.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingProfitLossAfterCost: prometheus.NewDesc(
+			"tossinvest_holding_profit_loss_after_cost",
+			"Portfolio holding profit/loss amount after tax and commission in the holding currency.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingProfitLossRate: prometheus.NewDesc(
+			"tossinvest_holding_profit_loss_rate",
+			"Portfolio holding profit/loss rate as a ratio.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingProfitLossRateAfterCost: prometheus.NewDesc(
+			"tossinvest_holding_profit_loss_rate_after_cost",
+			"Portfolio holding profit/loss rate after tax and commission as a ratio.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingDailyProfitLoss: prometheus.NewDesc(
+			"tossinvest_holding_daily_profit_loss",
+			"Portfolio holding daily profit/loss amount in the holding currency.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingDailyProfitLossRate: prometheus.NewDesc(
+			"tossinvest_holding_daily_profit_loss_rate",
+			"Portfolio holding daily profit/loss rate as a ratio.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingCommission: prometheus.NewDesc(
+			"tossinvest_holding_commission",
+			"Estimated commission for the portfolio holding in the holding currency.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
+		holdingTax: prometheus.NewDesc(
+			"tossinvest_holding_tax",
+			"Estimated tax for the portfolio holding in the holding currency.",
+			[]string{"account_seq", "symbol", "currency"}, nil,
+		),
 		scrapeSuccess: prometheus.NewDesc(
 			"tossinvest_scrape_success",
 			"Whether the last Toss Securities Open API scrape succeeded.",
@@ -311,6 +558,32 @@ func (e *exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.exchangeMid
 	ch <- e.exchangeBP
 	ch <- e.exchangeValid
+	ch <- e.accountInfo
+	ch <- e.portfolioCount
+	ch <- e.portfolioTotalPurchase
+	ch <- e.portfolioMarketValue
+	ch <- e.portfolioMarketValueAfterCost
+	ch <- e.portfolioProfitLoss
+	ch <- e.portfolioProfitLossAfterCost
+	ch <- e.portfolioProfitLossRate
+	ch <- e.portfolioProfitLossRateAfterCost
+	ch <- e.portfolioDailyProfitLoss
+	ch <- e.portfolioDailyProfitLossRate
+	ch <- e.holdingInfo
+	ch <- e.holdingQuantity
+	ch <- e.holdingLastPrice
+	ch <- e.holdingAveragePurchasePrice
+	ch <- e.holdingPurchaseAmount
+	ch <- e.holdingMarketValue
+	ch <- e.holdingMarketValueAfterCost
+	ch <- e.holdingProfitLoss
+	ch <- e.holdingProfitLossAfterCost
+	ch <- e.holdingProfitLossRate
+	ch <- e.holdingProfitLossRateAfterCost
+	ch <- e.holdingDailyProfitLoss
+	ch <- e.holdingDailyProfitLossRate
+	ch <- e.holdingCommission
+	ch <- e.holdingTax
 	ch <- e.scrapeSuccess
 	ch <- e.scrapeDuration
 }
@@ -343,6 +616,13 @@ func (e *exporter) Collect(ch chan<- prometheus.Metric) {
 		success = 0
 	} else {
 		e.emitExchangeRate(ch, exchange)
+	}
+
+	if e.portfolioEnabled {
+		if err := e.collectPortfolio(ctx, ch); err != nil {
+			slog.Error("portfolio scrape failed", "err", err)
+			success = 0
+		}
 	}
 
 	ch <- prometheus.MustNewConstMetric(e.scrapeSuccess, prometheus.GaugeValue, success)
@@ -406,6 +686,9 @@ func (e *exporter) fetchStockBatch(ctx context.Context, symbols []string) ([]sto
 	var resp envelope[[]stockInfo]
 	values := url.Values{"symbols": {strings.Join(symbols, ",")}}
 	if err := e.client.getJSON(ctx, "/api/v1/stocks?"+values.Encode(), &resp); err != nil {
+		if !isBatchSplittableError(err) {
+			return nil, err
+		}
 		if len(symbols) == 1 {
 			slog.Warn("skipping unsupported stock symbol", "symbol", symbols[0], "err", err)
 			return nil, nil
@@ -446,6 +729,9 @@ func (e *exporter) fetchPriceBatch(ctx context.Context, symbols []string) ([]pri
 	var resp envelope[[]priceResponse]
 	values := url.Values{"symbols": {strings.Join(symbols, ",")}}
 	if err := e.client.getJSON(ctx, "/api/v1/prices?"+values.Encode(), &resp); err != nil {
+		if !isBatchSplittableError(err) {
+			return nil, err
+		}
 		if len(symbols) == 1 {
 			slog.Warn("skipping unsupported price symbol", "symbol", symbols[0], "err", err)
 			return nil, nil
@@ -472,6 +758,64 @@ func (e *exporter) fetchExchangeRate(ctx context.Context) (exchangeRateResponse,
 	}
 	if err := e.client.getJSON(ctx, "/api/v1/exchange-rate?"+values.Encode(), &resp); err != nil {
 		return exchangeRateResponse{}, err
+	}
+	return resp.Result, nil
+}
+
+func (e *exporter) collectPortfolio(ctx context.Context, ch chan<- prometheus.Metric) error {
+	accounts, err := e.getAccounts(ctx)
+	if err != nil {
+		return err
+	}
+	for _, account := range accounts {
+		accountSeq := strconv.FormatInt(account.AccountSeq, 10)
+		ch <- prometheus.MustNewConstMetric(e.accountInfo, prometheus.GaugeValue, 1, accountSeq, account.AccountType)
+
+		holdings, err := e.fetchHoldings(ctx, accountSeq)
+		if err != nil {
+			return err
+		}
+		e.emitPortfolio(ch, accountSeq, holdings)
+	}
+	return nil
+}
+
+func (e *exporter) getAccounts(ctx context.Context) ([]account, error) {
+	e.accountMu.Lock()
+	defer e.accountMu.Unlock()
+
+	if time.Since(e.accountsFetched) < e.accountTTL && e.accounts != nil {
+		return e.accounts, nil
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-e.accountLimiter.C:
+	}
+
+	var resp envelope[[]account]
+	if err := e.client.getJSON(ctx, "/api/v1/accounts", &resp); err != nil {
+		if e.accounts != nil {
+			return e.accounts, nil
+		}
+		return nil, err
+	}
+	e.accounts = resp.Result
+	e.accountsFetched = time.Now()
+	return e.accounts, nil
+}
+
+func (e *exporter) fetchHoldings(ctx context.Context, accountSeq string) (holdingsOverview, error) {
+	select {
+	case <-ctx.Done():
+		return holdingsOverview{}, ctx.Err()
+	case <-e.assetLimiter.C:
+	}
+
+	var resp envelope[holdingsOverview]
+	if err := e.client.getJSONWithHeaders(ctx, "/api/v1/holdings", map[string]string{"X-Tossinvest-Account": accountSeq}, &resp); err != nil {
+		return holdingsOverview{}, err
 	}
 	return resp.Result, nil
 }
@@ -522,7 +866,59 @@ func (e *exporter) emitExchangeRate(ch chan<- prometheus.Metric, exchange exchan
 	}
 }
 
+func (e *exporter) emitPortfolio(ch chan<- prometheus.Metric, accountSeq string, holdings holdingsOverview) {
+	ch <- prometheus.MustNewConstMetric(e.portfolioCount, prometheus.GaugeValue, float64(len(holdings.Items)), accountSeq)
+
+	emitCurrencyAmounts(ch, e.portfolioTotalPurchase, accountSeq, holdings.TotalPurchaseAmount)
+	if holdings.MarketValue != nil {
+		emitCurrencyAmounts(ch, e.portfolioMarketValue, accountSeq, holdings.MarketValue.Amount)
+		emitCurrencyAmounts(ch, e.portfolioMarketValueAfterCost, accountSeq, holdings.MarketValue.AmountAfterCost)
+	}
+	if holdings.ProfitLoss != nil {
+		emitCurrencyAmounts(ch, e.portfolioProfitLoss, accountSeq, holdings.ProfitLoss.Amount)
+		emitCurrencyAmounts(ch, e.portfolioProfitLossAfterCost, accountSeq, holdings.ProfitLoss.AmountAfterCost)
+		emitNumberMetric(ch, e.portfolioProfitLossRate, holdings.ProfitLoss.Rate, accountSeq)
+		emitNumberMetric(ch, e.portfolioProfitLossRateAfterCost, holdings.ProfitLoss.RateAfterCost, accountSeq)
+	}
+	if holdings.DailyProfitLoss != nil {
+		emitCurrencyAmounts(ch, e.portfolioDailyProfitLoss, accountSeq, holdings.DailyProfitLoss.Amount)
+		emitNumberMetric(ch, e.portfolioDailyProfitLossRate, holdings.DailyProfitLoss.Rate, accountSeq)
+	}
+
+	for _, item := range holdings.Items {
+		currency := item.Currency
+		ch <- prometheus.MustNewConstMetric(e.holdingInfo, prometheus.GaugeValue, 1, accountSeq, item.Symbol, item.Name, item.MarketCountry, currency)
+		emitNumberMetric(ch, e.holdingQuantity, item.Quantity, accountSeq, item.Symbol)
+		emitNumberMetric(ch, e.holdingLastPrice, item.LastPrice, accountSeq, item.Symbol, currency)
+		emitNumberMetric(ch, e.holdingAveragePurchasePrice, item.AveragePurchasePrice, accountSeq, item.Symbol, currency)
+
+		if item.MarketValue != nil {
+			emitNumberMetric(ch, e.holdingPurchaseAmount, item.MarketValue.PurchaseAmount, accountSeq, item.Symbol, currency)
+			emitNumberMetric(ch, e.holdingMarketValue, item.MarketValue.Amount, accountSeq, item.Symbol, currency)
+			emitNumberMetric(ch, e.holdingMarketValueAfterCost, item.MarketValue.AmountAfterCost, accountSeq, item.Symbol, currency)
+		}
+		if item.ProfitLoss != nil {
+			emitNumberMetric(ch, e.holdingProfitLoss, item.ProfitLoss.Amount, accountSeq, item.Symbol, currency)
+			emitNumberMetric(ch, e.holdingProfitLossAfterCost, item.ProfitLoss.AmountAfterCost, accountSeq, item.Symbol, currency)
+			emitNumberMetric(ch, e.holdingProfitLossRate, item.ProfitLoss.Rate, accountSeq, item.Symbol, currency)
+			emitNumberMetric(ch, e.holdingProfitLossRateAfterCost, item.ProfitLoss.RateAfterCost, accountSeq, item.Symbol, currency)
+		}
+		if item.DailyProfitLoss != nil {
+			emitNumberMetric(ch, e.holdingDailyProfitLoss, item.DailyProfitLoss.Amount, accountSeq, item.Symbol, currency)
+			emitNumberMetric(ch, e.holdingDailyProfitLossRate, item.DailyProfitLoss.Rate, accountSeq, item.Symbol, currency)
+		}
+		if item.Cost != nil {
+			emitNumberMetric(ch, e.holdingCommission, item.Cost.Commission, accountSeq, item.Symbol, currency)
+			emitNumberMetric(ch, e.holdingTax, item.Cost.Tax, accountSeq, item.Symbol, currency)
+		}
+	}
+}
+
 func (c *apiClient) getJSON(ctx context.Context, path string, out any) error {
+	return c.getJSONWithHeaders(ctx, path, nil, out)
+}
+
+func (c *apiClient) getJSONWithHeaders(ctx context.Context, path string, headers map[string]string, out any) error {
 	token, err := c.token(ctx)
 	if err != nil {
 		return err
@@ -534,6 +930,9 @@ func (c *apiClient) getJSON(ctx context.Context, path string, out any) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -622,6 +1021,49 @@ func numberFloat(n json.Number) (float64, bool) {
 	return v, err == nil
 }
 
+func numberPtrFloat(n *json.Number) (float64, bool) {
+	if n == nil {
+		return 0, false
+	}
+	return numberFloat(*n)
+}
+
+func emitNumberMetric(ch chan<- prometheus.Metric, desc *prometheus.Desc, n *json.Number, labels ...string) {
+	value, ok := numberPtrFloat(n)
+	if !ok {
+		return
+	}
+	ch <- prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, value, labels...)
+}
+
+func emitCurrencyAmounts(ch chan<- prometheus.Metric, desc *prometheus.Desc, accountSeq string, amounts *currencyAmounts) {
+	if amounts == nil {
+		return
+	}
+	emitNumberMetric(ch, desc, amounts.KRW, accountSeq, "KRW")
+	emitNumberMetric(ch, desc, amounts.USD, accountSeq, "USD")
+}
+
+func isBatchSplittableError(err error) bool {
+	message := err.Error()
+	nonSplittable := []string{
+		"token request failed",
+		"access_denied",
+		"invalid-token",
+		"expired-token",
+		"edge-blocked",
+		"rate-limit-exceeded",
+		"maintenance",
+		"internal-error",
+	}
+	for _, part := range nonSplittable {
+		if strings.Contains(message, part) {
+			return false
+		}
+	}
+	return true
+}
+
 func boolFloat(v bool) float64 {
 	if v {
 		return 1
@@ -643,6 +1085,18 @@ func getenvAny(keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func getenvBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func getenvInt(key string, fallback int) int {

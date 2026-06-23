@@ -33,12 +33,18 @@ Optional:
 export TOSSINVEST_LISTEN_ADDR=':9108'
 export TOSSINVEST_SYMBOLS='005930,000660,AAPL'
 export TOSSINVEST_MARKET_FILTER='KOSPI'
+export TOSSINVEST_PORTFOLIO_ENABLED='true'
 export TOSSINVEST_STOCK_INFO_TTL='24h'
+export TOSSINVEST_ACCOUNT_TTL='24h'
 export TOSSINVEST_PRICE_RPS='10'
 export TOSSINVEST_STOCK_RPS='5'
+export TOSSINVEST_ACCOUNT_RPS='1'
+export TOSSINVEST_ASSET_RPS='5'
 ```
 
 Toss can fetch prices for up to 200 symbols per request. The exporter batches symbols at that size and rate-limits requests. Toss does not document an endpoint that enumerates all KOSPI symbols, so provide the symbol universe with `TOSSINVEST_SYMBOLS_FILE` or `TOSSINVEST_SYMBOLS`.
+
+Portfolio metrics are enabled by default and use `GET /api/v1/accounts` plus `GET /api/v1/holdings`. Set `TOSSINVEST_PORTFOLIO_ENABLED=false` if you only want public market data metrics. Account numbers are not exported; metrics use `account_seq` labels.
 
 You can generate `symbols.txt` from Naver Finance market-cap listing pages:
 
@@ -187,6 +193,29 @@ The image is published to:
 ghcr.io/pmh-only/tossinvest-exporter
 ```
 
+## Grafana
+
+Provisioning files are included under `deploy/`:
+
+```text
+deploy/prometheus/prometheus.yml
+deploy/grafana/provisioning/datasources/prometheus.yml
+deploy/grafana/provisioning/dashboards/dashboards.yml
+deploy/grafana/dashboards/tossinvest-overview.json
+deploy/grafana/dashboards/tossinvest-portfolio.json
+```
+
+The dashboards are:
+
+- `Toss Invest Exporter Overview`
+- `Toss Invest Portfolio`
+
+If you run Prometheus and Grafana with the local container names used during development, the Grafana datasource points at:
+
+```text
+http://tossinvest-prometheus:9090
+```
+
 ## Metrics
 
 - `tossinvest_price_last{symbol,currency}`
@@ -200,5 +229,31 @@ ghcr.io/pmh-only/tossinvest-exporter
 - `tossinvest_exchange_mid_rate{base_currency,quote_currency}`
 - `tossinvest_exchange_basis_point{base_currency,quote_currency}`
 - `tossinvest_exchange_valid_until_seconds{base_currency,quote_currency}`
+- `tossinvest_account_info{account_seq,account_type}`
+- `tossinvest_portfolio_holding_count{account_seq}`
+- `tossinvest_portfolio_total_purchase_amount{account_seq,currency}`
+- `tossinvest_portfolio_market_value{account_seq,currency}`
+- `tossinvest_portfolio_market_value_after_cost{account_seq,currency}`
+- `tossinvest_portfolio_profit_loss{account_seq,currency}`
+- `tossinvest_portfolio_profit_loss_after_cost{account_seq,currency}`
+- `tossinvest_portfolio_profit_loss_rate{account_seq}`
+- `tossinvest_portfolio_profit_loss_rate_after_cost{account_seq}`
+- `tossinvest_portfolio_daily_profit_loss{account_seq,currency}`
+- `tossinvest_portfolio_daily_profit_loss_rate{account_seq}`
+- `tossinvest_holding_info{account_seq,symbol,name,market_country,currency}`
+- `tossinvest_holding_quantity{account_seq,symbol}`
+- `tossinvest_holding_last_price{account_seq,symbol,currency}`
+- `tossinvest_holding_average_purchase_price{account_seq,symbol,currency}`
+- `tossinvest_holding_purchase_amount{account_seq,symbol,currency}`
+- `tossinvest_holding_market_value{account_seq,symbol,currency}`
+- `tossinvest_holding_market_value_after_cost{account_seq,symbol,currency}`
+- `tossinvest_holding_profit_loss{account_seq,symbol,currency}`
+- `tossinvest_holding_profit_loss_after_cost{account_seq,symbol,currency}`
+- `tossinvest_holding_profit_loss_rate{account_seq,symbol,currency}`
+- `tossinvest_holding_profit_loss_rate_after_cost{account_seq,symbol,currency}`
+- `tossinvest_holding_daily_profit_loss{account_seq,symbol,currency}`
+- `tossinvest_holding_daily_profit_loss_rate{account_seq,symbol,currency}`
+- `tossinvest_holding_commission{account_seq,symbol,currency}`
+- `tossinvest_holding_tax{account_seq,symbol,currency}`
 - `tossinvest_scrape_success`
 - `tossinvest_scrape_duration_seconds`
